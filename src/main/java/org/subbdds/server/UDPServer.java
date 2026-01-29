@@ -5,35 +5,24 @@ import java.net.DatagramSocket;
 
 public class UDPServer {
     public static void main(String[] args) throws Exception {
-        // 1. Open a UDP Socket on Port 9876
-        // This tells the OS: "Send any UDP packets arriving at Port 9876 to me."
         DatagramSocket socket = new DatagramSocket(9876);
-
-        System.out.println("🚀 Server started on port 9876. Waiting for packets...");
-
-        // 2. Create a buffer to hold incoming data.
-        // UDP packets have a size limit (usually ~64KB).
-        // We'll use 1024 bytes for now, which is plenty for text.
         byte[] receiveData = new byte[1024];
 
-        while (true) {
-            // 3. Create a DatagramPacket to hold the incoming data
-            DatagramPacket receivePacket = new DatagramPacket(receiveData, receiveData.length);
+        System.out.println("Server listening...");
 
-            // 4. BLOCKING CALL: The program pauses here!
-            // It waits until a packet actually arrives.
+        while (true) {
+            DatagramPacket receivePacket = new DatagramPacket(receiveData, receiveData.length);
             socket.receive(receivePacket);
 
-            // 5. Extract the data
-            // getData() returns the raw bytes.
-            // getLength() tells us how many bytes were actually sent (e.g., "Hello" is 5 bytes).
-            String message = new String(receivePacket.getData(), 0, receivePacket.getLength());
+            // DESERIALIZE: Raw Bytes -> Packet Object
+            Packet p = Packet.fromBytes(receivePacket.getData(), receivePacket.getLength());
 
-            // 6. Print who sent it
-            // We can see the IP and Port of the sender.
-            System.out.println("Received from " + receivePacket.getAddress() + ": " + message);
-
-            // Note: We are NOT sending a response back yet.
+            // Now we can access the metadata elegantly
+            System.out.println("Received Packet:");
+            System.out.println(" - Seq Num: " + p.getSequenceNumber());
+            System.out.println(" - Type:    " + p.getType());
+            System.out.println(" - Payload: " + new String(p.getPayload()));
+            System.out.println("--------------------------");
         }
     }
 }

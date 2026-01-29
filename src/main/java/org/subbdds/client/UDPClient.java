@@ -1,36 +1,34 @@
 package org.subbdds.client;
 
+import org.subbdds.server.Packet;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
 
 public class UDPClient {
     public static void main(String[] args) throws Exception {
-        // 1. Create a socket
-        // Note: We don't specify a port here. The OS will assign a random open port (e.g., 54321).
         DatagramSocket socket = new DatagramSocket();
-
-        // 2. Prepare the data
-        String message = "Hello from the Client!";
-        byte[] sendData = message.getBytes();
-
-        // 3. Define the Destination
-        // "localhost" means the same machine.
-        // If testing on two different laptops, put the Server's real IP here (e.g., "192.168.1.5")
         InetAddress IPAddress = InetAddress.getByName("localhost");
         int port = 9876;
 
-        // 4. Create the Packet
-        // The packet contains: [ The Data ] + [ The Destination IP ] + [ The Destination Port ]
-        DatagramPacket sendPacket = new DatagramPacket(sendData, sendData.length, IPAddress, port);
+        // Simulate sending 3 chunks of data
+        for (int i = 0; i < 3; i++) {
+            String message = "Chunk " + i;
 
-        // 5. Send it
-        System.out.println("Sending packet...");
-        socket.send(sendPacket);
+            // Create a structured packet: SeqNum=100+i, Type=DATA
+            Packet p = new Packet(100 + i, Packet.TYPE_DATA, message.getBytes());
 
-        System.out.println("Packet sent!");
+            // SERIALIZE (Get the raw bytes)
+            byte[] rawBytes = p.toBytes();
 
-        // 6. Close the resource
+            DatagramPacket sendPacket = new DatagramPacket(rawBytes, rawBytes.length, IPAddress, port);
+
+            System.out.println("Sending Packet #" + p.getSequenceNumber());
+            socket.send(sendPacket);
+
+            Thread.sleep(500); // Slow down slightly so we can see it
+        }
+
         socket.close();
     }
 }
