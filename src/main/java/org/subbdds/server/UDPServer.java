@@ -10,19 +10,41 @@ public class UDPServer {
 
         System.out.println("Server listening...");
 
+        // Inside UDPServer.java (Main Loop)
+
         while (true) {
             DatagramPacket receivePacket = new DatagramPacket(receiveData, receiveData.length);
             socket.receive(receivePacket);
 
-            // DESERIALIZE: Raw Bytes -> Packet Object
             Packet p = Packet.fromBytes(receivePacket.getData(), receivePacket.getLength());
 
-            // Now we can access the metadata elegantly
-            System.out.println("Received Packet:");
-            System.out.println(" - Seq Num: " + p.getSequenceNumber());
-            System.out.println(" - Type:    " + p.getType());
-            System.out.println(" - Payload: " + new String(p.getPayload()));
-            System.out.println("--------------------------");
+            if (p.getType() == Packet.TYPE_DATA) {
+                System.out.println("Received Data: Seq " + p.getSequenceNumber());
+
+                // --- SEND ACK ---
+
+                // 1. Create the ACK packet
+                Packet ack = new Packet(p.getSequenceNumber(), Packet.TYPE_ACK, new byte[0]);
+                byte[] ackBytes = ack.toBytes();
+
+                // 2. Address it to the Sender
+                DatagramPacket ackPacket = new DatagramPacket(
+                        ackBytes,
+                        ackBytes.length,
+                        receivePacket.getAddress(),
+                        receivePacket.getPort() // Client's port
+                );
+
+                if (Math.random() < 0.5) { // 50% chance to fail
+                    System.out.println("SIMULATING NETWORK LOSS (Dropping ACK)"); // Simulate packet loss
+                    continue;
+                }
+
+                socket.send(ackPacket);
+                // 3. Send it back
+                socket.send(ackPacket);
+                System.out.println(" -> Sent ACK " + p.getSequenceNumber());
+            }
         }
     }
 }
