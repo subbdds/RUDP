@@ -10,7 +10,7 @@ public class UDPServer {
         byte[] receiveData = new byte[1024];
 
         // Prepare Output File
-        try (FileOutputStream fos = new FileOutputStream("output_image.jpg")) {
+        try (FileOutputStream fos = new FileOutputStream("output_image.png")) {
             int expectedSeqNum = 0;
 
             System.out.println("Server ready to receive file...");
@@ -20,31 +20,36 @@ public class UDPServer {
                 DatagramPacket receivePacket = new DatagramPacket(receiveData, receiveData.length);
                 socket.receive(receivePacket);
 
-                Packet p = Packet.fromBytes(receivePacket.getData(), receivePacket.getLength());
+                try {
+                    // This line now runs the CRC32 check automatically
+                    Packet p = Packet.fromBytes(receivePacket.getData(), receivePacket.getLength());
 
-                // --- HANDLING DATA PACKETS ---
-                if (p.getType() == Packet.TYPE_DATA) {
-
-                    // Deduplication Logic
-                    if (p.getSequenceNumber() == expectedSeqNum) {
-                        fos.write(p.getPayload()); // Write to disk
-                        expectedSeqNum++;          // Expect the next one
-                    } else {
-                        // It's a duplicate or out-of-order packet
-                        System.out.println("Duplicate detected: " + p.getSequenceNumber());
+                    // --- NORMAL LOGIC ---
+                    if (p.getType() == Packet.TYPE_DATA) {
+                        if (p.getSequenceNumber() == expectedSeqNum) {
+                            fos.write(p.getPayload());
+                            expectedSeqNum++;
+                        } else {
+                            System.out.println("Duplicate/Out-of-order: " + p.getSequenceNumber());
+                        }
+                        // Send ACK
+                        Packet ack = new Packet(p.getSequenceNumber(), Packet.TYPE_ACK, new byte[0]);
+                        byte[] ackBytes = ack.toBytes();
+                        socket.send(new DatagramPacket(ackBytes, ackBytes.length, receivePacket.getAddress(), receivePacket.getPort()));
+                    }
+                    else if (p.getType() == Packet.TYPE_FIN) {
+                        System.out.println("\nReceived FIN. Closing file.");
+                        transferComplete = true;
                     }
 
-                    // Send ACK
-                    Packet ack = new Packet(p.getSequenceNumber(), Packet.TYPE_ACK, new byte[0]);
-                    byte[] ackBytes = ack.toBytes();
-                    DatagramPacket ackPacket = new DatagramPacket(ackBytes, ackBytes.length, receivePacket.getAddress(), receivePacket.getPort());
-                    socket.send(ackPacket);
-                }
-
-                // --- HANDLING FIN PACKET ---
-                else if (p.getType() == Packet.TYPE_FIN) {
-                    System.out.println("\nReceived FIN. Closing file.");
-                    transferComplete = true;
+                } catch (RuntimeException e) {
+                    // --- CORRUPTION LOGIC ---
+                    if (e.getMessage().equals("CORRUPT_PACKET")) {
+                        System.out.println("⚠️ Received Corrupt Packet! Dropping it (Sender will timeout/retry).");
+                        // Do NOTHING. Do NOT send ACK.
+                    } else {
+                        e.printStackTrace();
+                    }
                 }
             }
         }
