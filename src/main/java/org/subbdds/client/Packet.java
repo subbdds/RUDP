@@ -1,7 +1,4 @@
-package org.subbdds.server;
-
-import java.nio.ByteBuffer;
-import java.util.Arrays;
+package org.subbdds.client;
 
 import java.nio.ByteBuffer;
 import java.util.zip.CRC32;

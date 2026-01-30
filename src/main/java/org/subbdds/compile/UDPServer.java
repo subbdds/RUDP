@@ -1,4 +1,5 @@
-package org.subbdds.server;
+package org.subbdds.compile;
+
 
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
@@ -28,12 +29,14 @@ public class UDPServer {
                     Packet p = Packet.fromBytes(request.getData(), request.getLength());
 
                     // LOGIC 1: Metadata (Handshake)
-                    if (p.getType() == Packet.TYPE_METADATA && expectedSeq == 0) {
-                        String filename = new String(p.getPayload());
-                        System.out.println("Incoming File: " + filename);
-                        fos = new FileOutputStream("received_" + filename);
+                    if (p.getType() == Packet.TYPE_METADATA) {
+                        if (expectedSeq == 0) {
+                            String filename = new String(p.getPayload());
+                            System.out.println("Incoming File: " + filename);
+                            fos = new FileOutputStream("received_" + filename);
+                            expectedSeq = 1;
+                        }
                         sendAck(socket, p.getSequenceNumber(), request.getAddress(), request.getPort());
-                        expectedSeq = 1;
                     }
 
                     // LOGIC 2: Data

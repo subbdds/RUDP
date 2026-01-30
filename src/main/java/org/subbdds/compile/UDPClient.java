@@ -1,20 +1,19 @@
-package org.subbdds.client;
+package org.subbdds.compile;
 
-import org.subbdds.server.Packet;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.IOException;
 import java.net.SocketTimeoutException;
 import java.util.Arrays;
-import java.io.*;
-import java.net.*;
 
 
 public class UDPClient {
     private static final int PORT = 9876;
     private static final int TIMEOUT = 1000;
+    private static final int MAX_RETRIES = 5;
 
     public static void main(String[] args) {
         if (args.length < 2) {
@@ -76,8 +75,9 @@ public class UDPClient {
         byte[] bytes = packet.toBytes();
         DatagramPacket udpPacket = new DatagramPacket(bytes, bytes.length, address, PORT);
         byte[] ackBuf = new byte[1024];
+        int attempts = 0;
 
-        while (true) {
+        while (attempts < MAX_RETRIES) {
             try {
                 socket.send(udpPacket);
                 DatagramPacket ackDatagram = new DatagramPacket(ackBuf, ackBuf.length);
@@ -89,10 +89,13 @@ public class UDPClient {
                 }
             } catch (SocketTimeoutException e) {
                 // Keep looping to retry
+                attempts++;
             } catch (RuntimeException e) {
                 // Checksum failure on ACK - just retry
+                attempts++;
             }
         }
+        throw new IOException("Failed to send packet after " + MAX_RETRIES + " attempts");
     }
 
     private static void printProgress(long current, long total) {
