@@ -40,12 +40,16 @@ public class UDPClient {
 
             // 1. HANDSHAKE / METADATA TRANSFER
             System.out.println("Step 1: Handshaking metadata (" + destFilename + ")...");
-            sendWithRetry(socket, new Packet(0, Packet.TYPE_METADATA, destFilename.getBytes()), address);
+            sendWithRetry(socket, new Packet(
+                    0,
+                    Packet.TYPE_METADATA,
+                    destFilename.getBytes()),
+                    address);
 
             // 2. DATA TRANSFER
             System.out.println("Step 2: Sending content of " + file.getName() + "...");
             try (FileInputStream fis = new FileInputStream(file)) {
-                byte[] buffer = new byte[1000];
+                byte[] buffer = new byte[8192];
                 int bytesRead;
                 int seqNum = 1;
                 long totalSent = 0;
@@ -63,7 +67,11 @@ public class UDPClient {
 
             // 3. TERMINATION
             System.out.println("\nStep 3: Closing connection...");
-            sendWithRetry(socket, new Packet(-1, Packet.TYPE_FIN, new byte[0]), address);
+            sendWithRetry(socket, new Packet(
+                    -1,
+                    Packet.TYPE_FIN,
+                    new byte[0]),
+                    address);
 
             System.out.println(" Transfer Successful.");
 
@@ -74,10 +82,19 @@ public class UDPClient {
     }
 
     // Reliable send helper
-    private static void sendWithRetry(DatagramSocket socket, Packet packet, InetAddress address) throws IOException {
+    private static void sendWithRetry(
+            DatagramSocket socket,
+            Packet packet,
+            InetAddress address)
+            throws IOException {
+
         byte[] bytes = packet.toBytes();
-        DatagramPacket udpPacket = new DatagramPacket(bytes, bytes.length, address, PORT);
-        byte[] ackBuf = new byte[1024];
+        DatagramPacket udpPacket = new DatagramPacket(
+                bytes,
+                bytes.length,
+                address, PORT);
+
+        byte[] ackBuf = new byte[32768];
         int attempts = 0;
 
         while (attempts < MAX_RETRIES) {
@@ -103,7 +120,13 @@ public class UDPClient {
 
     private static void printProgress(long current, long total) {
         int percent = (int) ((current * 100) / total);
-        System.out.print("\rProgress: [" + "#".repeat(percent/5) + " ".repeat(20 - percent/5) + "] " + percent + "%");
+        System.out.print(
+                "\rProgress: ["
+                    + "#".repeat(percent/5)
+                    + " ".repeat(20
+                    - percent/5) +
+                        "] "
+                + percent + "%");
     }
 }
 

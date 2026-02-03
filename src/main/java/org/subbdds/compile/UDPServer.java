@@ -1,9 +1,5 @@
 package org.subbdds.compile;
 
-
-import java.net.DatagramPacket;
-import java.net.DatagramSocket;
-import java.io.FileOutputStream;
 import java.io.*;
 import java.net.*;
 
@@ -12,17 +8,9 @@ public class UDPServer {
 
     public static void main(String[] args) throws Exception {
         DatagramSocket socket = new DatagramSocket(PORT);
-        byte[] buffer = new byte[2048];
+        byte[] buffer = new byte[32768];
 
-        // 1. Determine Output Directory
-        String outputDirName = (args.length > 0) ? args[0] : "downloads";
-        File outputDir = new File(outputDirName);
-        if (!outputDir.exists()) {
-            outputDir.mkdirs();
-        }
-
-        System.out.println("\nServer Listening on port " + PORT);
-        System.out.println("Saving files to: " + outputDir.getAbsolutePath());
+        System.out.println("\nActive on port " + PORT);
 
         while (true) {
             FileOutputStream fos = null;
@@ -36,21 +24,34 @@ public class UDPServer {
                 try {
                     Packet p = Packet.fromBytes(request.getData(), request.getLength());
 
-                    // LOGIC 1: Metadata (Handshake)
                     if (p.getType() == Packet.TYPE_METADATA && expectedSeq == 0) {
-                        String originalName = new String(p.getPayload());
+                        String destinationPath = new String(p.getPayload());
 
-                        // 2. Smart Renaming Logic
-                        File saveFile = resolveFileName(outputDir, originalName);
+                        // 1. Determine target file path
+                        File targetFile = new File(destinationPath);
 
-                        System.out.println("⬇Incoming: " + originalName + " -> Saving as: " + saveFile.getName());
-                        fos = new FileOutputStream(saveFile);
+                        // 2. If relative, store in "received_files" directory
+                        if (!targetFile.isAbsolute()) {
+                            targetFile = new File("received_files", destinationPath);
+                        }
 
-                        sendAck(socket, p.getSequenceNumber(), request.getAddress(), request.getPort());
-                        expectedSeq = 1;
+                        try {
+                            // 3. Create parent directories if needed
+                            File parent = targetFile.getParentFile();
+                            if (parent != null) parent.mkdirs();
+
+                            System.out.println("Target: " + targetFile.getAbsolutePath());
+                            fos = new FileOutputStream(targetFile);
+
+                            // Success! Send ACK
+                            sendAck(socket, p.getSequenceNumber(), request.getAddress(), request.getPort());
+                            expectedSeq = 1;
+                        } catch (FileNotFoundException e) {
+                            System.err.println("Permission Denied or Invalid Path: " + targetFile.getAbsolutePath());
+                            // Send NACK by not incrementing expectedSeq
+                        }
                     }
 
-                    // LOGIC 2: Data
                     else if (p.getType() == Packet.TYPE_DATA) {
                         if (p.getSequenceNumber() == expectedSeq) {
                             if (fos != null) fos.write(p.getPayload());
@@ -59,45 +60,27 @@ public class UDPServer {
                         sendAck(socket, p.getSequenceNumber(), request.getAddress(), request.getPort());
                     }
 
-                    // LOGIC 3: Finish
                     else if (p.getType() == Packet.TYPE_FIN) {
-                        System.out.println("Transfer Complete.\nWaiting for next file...");
+                        System.out.println("done.");
                         sendAck(socket, p.getSequenceNumber(), request.getAddress(), request.getPort());
                         activeTransfer = false;
                     }
 
-                } catch (RuntimeException e) {
-                    // Silent drop for corruption
+                } catch (Exception e) {
+                    // Corruption or parsing error
                 }
             }
             if (fos != null) fos.close();
         }
     }
 
-    // Helper: Handles file (1).jpg logic
-    private static File resolveFileName(File dir, String filename) {
-        File file = new File(dir, filename);
-        if (!file.exists()) return file; // No conflict? Return original.
+    private static void sendAck(
+            DatagramSocket socket,
+            int seq,
+            InetAddress addr,
+            int port)
+            throws IOException {
 
-        // Split name and extension
-        String name = filename;
-        String ext = "";
-        int dotIndex = filename.lastIndexOf('.');
-        if (dotIndex > 0) {
-            name = filename.substring(0, dotIndex);
-            ext = filename.substring(dotIndex);
-        }
-
-        // Loop until we find a free number: file (1), file (2)...
-        int counter = 1;
-        while (file.exists()) {
-            file = new File(dir, name + " (" + counter + ")" + ext);
-            counter++;
-        }
-        return file;
-    }
-
-    private static void sendAck(DatagramSocket socket, int seq, InetAddress addr, int port) throws IOException {
         Packet ack = new Packet(seq, Packet.TYPE_ACK, new byte[0]);
         byte[] bytes = ack.toBytes();
         socket.send(new DatagramPacket(bytes, bytes.length, addr, port));
