@@ -14,9 +14,17 @@ public class UDPServer {
         DatagramSocket socket = new DatagramSocket(PORT);
         byte[] buffer = new byte[2048];
 
-        while (true) {
-            System.out.println("\n📡 Server Listening on port " + PORT + "...");
+        // 1. Determine Output Directory
+        String outputDirName = (args.length > 0) ? args[0] : "downloads";
+        File outputDir = new File(outputDirName);
+        if (!outputDir.exists()) {
+            outputDir.mkdirs();
+        }
 
+        System.out.println("\nServer Listening on port " + PORT);
+        System.out.println("Saving files to: " + outputDir.getAbsolutePath());
+
+        while (true) {
             FileOutputStream fos = null;
             int expectedSeq = 0;
             boolean activeTransfer = true;
@@ -29,14 +37,17 @@ public class UDPServer {
                     Packet p = Packet.fromBytes(request.getData(), request.getLength());
 
                     // LOGIC 1: Metadata (Handshake)
-                    if (p.getType() == Packet.TYPE_METADATA) {
-                        if (expectedSeq == 0) {
-                            String filename = new String(p.getPayload());
-                            System.out.println("Incoming File: " + filename);
-                            fos = new FileOutputStream("received_" + filename);
-                            expectedSeq = 1;
-                        }
+                    if (p.getType() == Packet.TYPE_METADATA && expectedSeq == 0) {
+                        String originalName = new String(p.getPayload());
+
+                        // 2. Smart Renaming Logic
+                        File saveFile = resolveFileName(outputDir, originalName);
+
+                        System.out.println("⬇Incoming: " + originalName + " -> Saving as: " + saveFile.getName());
+                        fos = new FileOutputStream(saveFile);
+
                         sendAck(socket, p.getSequenceNumber(), request.getAddress(), request.getPort());
+                        expectedSeq = 1;
                     }
 
                     // LOGIC 2: Data
@@ -45,23 +56,45 @@ public class UDPServer {
                             if (fos != null) fos.write(p.getPayload());
                             expectedSeq++;
                         }
-                        // Always ACK current or previous seq to keep client moving
                         sendAck(socket, p.getSequenceNumber(), request.getAddress(), request.getPort());
                     }
 
                     // LOGIC 3: Finish
                     else if (p.getType() == Packet.TYPE_FIN) {
-                        System.out.println("Transfer Complete. Saving file.");
+                        System.out.println("Transfer Complete.\nWaiting for next file...");
                         sendAck(socket, p.getSequenceNumber(), request.getAddress(), request.getPort());
                         activeTransfer = false;
                     }
 
                 } catch (RuntimeException e) {
-                    System.err.println("⚠️ Corrupt packet ignored.");
+                    // Silent drop for corruption
                 }
             }
             if (fos != null) fos.close();
         }
+    }
+
+    // Helper: Handles file (1).jpg logic
+    private static File resolveFileName(File dir, String filename) {
+        File file = new File(dir, filename);
+        if (!file.exists()) return file; // No conflict? Return original.
+
+        // Split name and extension
+        String name = filename;
+        String ext = "";
+        int dotIndex = filename.lastIndexOf('.');
+        if (dotIndex > 0) {
+            name = filename.substring(0, dotIndex);
+            ext = filename.substring(dotIndex);
+        }
+
+        // Loop until we find a free number: file (1), file (2)...
+        int counter = 1;
+        while (file.exists()) {
+            file = new File(dir, name + " (" + counter + ")" + ext);
+            counter++;
+        }
+        return file;
     }
 
     private static void sendAck(DatagramSocket socket, int seq, InetAddress addr, int port) throws IOException {
