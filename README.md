@@ -1,3 +1,4 @@
+[English] | [Русский](README.ru.md)
 # RUDP-CLI
 
 A command-line utility for reliable file transfer built over UDP. The project implements an application-layer protocol to add extra reliability to raw DatagramSockets.
