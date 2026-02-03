@@ -5,6 +5,7 @@ import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.BufferedInputStream;
 import java.io.IOException;
 import java.net.SocketTimeoutException;
 import java.util.Arrays;
@@ -48,14 +49,14 @@ public class UDPClient {
 
             // 2. DATA TRANSFER
             System.out.println("Step 2: Sending content of " + file.getName() + "...");
-            try (FileInputStream fis = new FileInputStream(file)) {
+            try (BufferedInputStream bis = new BufferedInputStream(new FileInputStream(file))) {
                 byte[] buffer = new byte[8192];
                 int bytesRead;
                 int seqNum = 1;
                 long totalSent = 0;
                 long fileSize = file.length();
 
-                while ((bytesRead = fis.read(buffer)) != -1) {
+                while ((bytesRead = bis.read(buffer)) != -1) {
                     byte[] data = Arrays.copyOf(buffer, bytesRead);
                     Packet p = new Packet(seqNum, Packet.TYPE_DATA, data);
                     sendWithRetry(socket, p, address);
@@ -130,4 +131,4 @@ public class UDPClient {
     }
 }
 
-//java -cp src\main\java org.subbdds.compile.UDPClient "path\to\file.txt" "127.0.0.1"
+// .\client.bat "C:\Users\Thinkbook\Desktop\Postman (x64).exe" localhost "C:\Users\Thinkbook\Downloads\Postman (x64).exe"
