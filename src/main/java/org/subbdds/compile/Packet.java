@@ -4,11 +4,6 @@ import java.nio.ByteBuffer;
 import java.util.zip.CRC32;
 
 public class Packet {
-    // Header Structure:
-    // [0-3] SeqNum (4 bytes)
-    // [4]   Type   (1 byte)
-    // [5-12] Checksum (8 bytes) <--- NEW
-    // Total Header = 13 bytes
     public static final int HEADER_SIZE = 13;
 
     public static final byte TYPE_DATA = 0;
@@ -22,8 +17,7 @@ public class Packet {
     private long checksum;
     private byte[] payload;
 
-    // Constructor 1: For CREATING packets (Sender)
-    // We calculate the checksum automatically here.
+    // Constructor 1
     public Packet(int sequenceNumber, byte type, byte[] payload) {
         this.sequenceNumber = sequenceNumber;
         this.type = type;
@@ -34,10 +28,10 @@ public class Packet {
         if (payload != null) {
             crc.update(payload);
         }
-        this.checksum = crc.getValue(); // Store the hash
+        this.checksum = crc.getValue(); 
     }
 
-    // Constructor 2: Internal use for parsing (Receiver)
+    // Constructor 2
     private Packet(int sequenceNumber, byte type, long checksum, byte[] payload) {
         this.sequenceNumber = sequenceNumber;
         this.type = type;
@@ -52,7 +46,7 @@ public class Packet {
 
         buffer.putInt(sequenceNumber);
         buffer.put(type);
-        buffer.putLong(checksum); // Write the calculated hash to the header
+        buffer.putLong(checksum); 
 
         if (payload != null) {
             buffer.put(payload);
@@ -68,19 +62,18 @@ public class Packet {
 
         int seq = buffer.getInt();
         byte type = buffer.get();
-        long receivedChecksum = buffer.getLong(); // Read the hash sent by the client
+        long receivedChecksum = buffer.getLong();
 
         byte[] payload = new byte[length - HEADER_SIZE];
-        buffer.get(payload); // Read the actual data
+        buffer.get(payload);
 
         // --- INTEGRITY CHECK ---
         CRC32 calculator = new CRC32();
         calculator.update(payload);
-        long calculatedChecksum = calculator.getValue(); // Calculate our own hash
+        long calculatedChecksum = calculator.getValue(); 
 
-        // Compare: Does the data match what the header says?
+        // Compare
         if (receivedChecksum != calculatedChecksum) {
-            // Throw exception so Server knows to drop it
             throw new RuntimeException("CORRUPT_PACKET");
         }
 
